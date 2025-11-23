@@ -10,13 +10,10 @@ from fpdf import FPDF
 import os 
 from PIL import Image 
 
-# --- PROPIEDADES DE MATERIALES (FÍSICA REAL Y COLORES) ---
 MATERIALES = {
-    # young: Módulo de Elasticidad en Pascales (Pa)
-    # rest: Coeficiente de Restitución (Qué tanto rebota)
     "Acero": {"young": 200e9, "rest": 0.6, "fric": 0.5, "color": [0.6, 0.6, 0.7, 1]}, 
     "Madera": {"young": 11e9, "rest": 0.3, "fric": 0.8, "color": [0.5, 0.3, 0.1, 1]}, 
-    "Goma":  {"young": 0.05e9,"rest": 0.85, "fric": 1.0, "color": [0.1, 0.1, 0.1, 1]}, 
+    "Goma":   {"young": 0.05e9,"rest": 0.85, "fric": 1.0, "color": [0.1, 0.1, 0.1, 1]}, 
     "Oro":    {"young": 79e9,  "rest": 0.2,  "fric": 0.4, "color": [1.0, 0.8, 0.0, 1]}, 
     "Hormigón":{"young": 30e9, "rest": 0.1,  "fric": 0.9, "color": [0.8, 0.8, 0.8, 1]}  
 }
@@ -25,9 +22,8 @@ class AnalizadorColisiones:
     def __init__(self, root):
         self.root = root
         self.root.title("Analizador de Colisiones Físicas Pro v3")
-        self.root.geometry("500x980") # Ajustado a 980 para mejor ajuste
+        self.root.geometry("500x980")
 
-        # --- Inicializar PyBullet ---
         self.physicsClient = p.connect(p.GUI) 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         
@@ -35,10 +31,8 @@ class AnalizadorColisiones:
         p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.setGravity(0, 0, -9.81)
         
-        # CÁMARA INICIAL (Mantener para la vista general de la GUI)
         p.resetDebugVisualizerCamera(cameraDistance=14, cameraYaw=0, cameraPitch=-30, cameraTargetPosition=[0,0,2])
         
-        # Variables de estado y lógica
         self.obj_A_id = None
         self.obj_B_id = None
         self.simulando = False
@@ -52,7 +46,7 @@ class AnalizadorColisiones:
         self.prev_pos_B = None
         
         self.historial = {"t": [], "E_total": []}
-        self.historial_impactos = [] # NUEVO: Para guardar datos de impacto para el PDF
+        self.historial_impactos = [] 
         self.tiempo_inicio = 0
         self.vel_prev_A = np.array([0,0,0])
         self.vel_prev_B = np.array([0,0,0])
@@ -70,11 +64,9 @@ class AnalizadorColisiones:
         tabs = ttk.Notebook(self.root)
         tabs.pack(fill='x', padx=10, pady=5)
 
-        # --- Pestaña de CONFIGURACIÓN ---
         frame_conf = ttk.Frame(tabs)
         tabs.add(frame_conf, text="Configuración")
 
-        # Control de Distancia
         frame_dist = ttk.LabelFrame(frame_conf, text="Posición Inicial")
         frame_dist.pack(fill='x', padx=5, pady=5)
         
@@ -85,7 +77,6 @@ class AnalizadorColisiones:
         self.lbl_dist_val = ttk.Label(frame_dist, text="16.0 m", font=('Arial', 8, 'bold'))
         self.lbl_dist_val.pack(side='left', padx=5)
         
-        # Objeto A
         frame_A = ttk.LabelFrame(frame_conf, text="Objeto A (Izquierda)")
         frame_A.pack(fill='x', padx=5, pady=5)
         self.tipo_A = tk.StringVar(value="Esfera")
@@ -105,7 +96,6 @@ class AnalizadorColisiones:
         self.lbl_val_vA = ttk.Label(frame_A, text="15.0 m/s", font=('Arial', 8))
         self.lbl_val_vA.grid(row=1, column=3)
 
-        # Objeto B
         frame_B = ttk.LabelFrame(frame_conf, text="Objeto B (Derecha)")
         frame_B.pack(fill='x', padx=5, pady=5)
         self.tipo_B = tk.StringVar(value="Esfera")
@@ -125,7 +115,6 @@ class AnalizadorColisiones:
         self.lbl_val_vB = ttk.Label(frame_B, text="15.0 m/s", font=('Arial', 8))
         self.lbl_val_vB.grid(row=1, column=3)
 
-        # Entorno
         frame_env = ttk.LabelFrame(frame_conf, text="Entorno")
         frame_env.pack(fill='x', padx=5, pady=5)
         self.entorno_var = tk.StringVar(value="Aire")
@@ -133,18 +122,16 @@ class AnalizadorColisiones:
         self.suelo_var = tk.StringVar(value="Pavimento")
         ttk.OptionMenu(frame_env, self.suelo_var, "Pavimento", "Hielo", "Pavimento", "Tierra", "Pasto").pack(side='left', padx=5)
 
-        # --- BOTONES ---
         btn_frame = ttk.Frame(self.root)
         btn_frame.pack(fill='x', padx=10)
         ttk.Button(btn_frame, text="LANZAR / REINICIAR", command=self.iniciar_lanzamiento).pack(fill='x', pady=5)
         
         self.btn_detener = ttk.Button(btn_frame, 
-                                            text="DETENER SIMULACIÓN Y CREAR PDF", 
-                                            command=self.detener_simulacion_y_reporte, 
-                                            state='disabled') 
+                                      text="DETENER SIMULACIÓN Y CREAR PDF", 
+                                      command=self.detener_simulacion_y_reporte, 
+                                      state='disabled') 
         self.btn_detener.pack(fill='x', pady=5)
 
-        # Monitor
         self.frame_rt = ttk.LabelFrame(self.root, text="Datos en Tiempo Real")
         self.frame_rt.pack(fill='x', padx=10, pady=5)
         
@@ -164,7 +151,6 @@ class AnalizadorColisiones:
         self.lbl_rt_kB = ttk.Label(self.frame_rt, text="0.00")
         self.lbl_rt_kB.grid(row=1, column=3)
 
-        # Reporte
         self.frame_rep = ttk.LabelFrame(self.root, text="Análisis de Impacto (Teórico)")
         self.frame_rep.pack(fill='x', padx=10, pady=5)
         
@@ -177,7 +163,6 @@ class AnalizadorColisiones:
         self.lbl_status = ttk.Label(self.frame_rep, text="Estado: Esperando...", foreground="grey")
         self.lbl_status.pack(anchor='center', pady=(5,0))
 
-        # Gráfica
         plt.style.use('dark_background') 
         self.fig, self.ax = plt.subplots(figsize=(4, 2.2), dpi=100)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
@@ -226,7 +211,6 @@ class AnalizadorColisiones:
         p.setGravity(0, 0, -9.81)
         p.loadURDF("plane.urdf")
         _, fric, rest = self.get_params()
-        # ID 0 es el suelo (plane.urdf)
         p.changeDynamics(0, -1, lateralFriction=fric, restitution=rest)
         p.removeAllUserDebugItems()
         self.trayectoria_ids = []
@@ -284,37 +268,31 @@ class AnalizadorColisiones:
         
         if v_mag > 0:
             rho, _, _ = self.get_params()
-            # FÓRMULA CORREGIDA: (v_mag*2) y (0.5*2)
-            F_mag = 0.5 * rho * (v_mag*2) * 0.47 * (np.pi * 0.5*2) # Fórmula simple de arrastre
+            F_mag = 0.5 * rho * (v_mag**2) * 0.47 * (np.pi * 0.5**2) 
             F_vec = -(v_vec / v_mag) * F_mag
             p.applyExternalForce(uid, -1, F_vec, [0,0,0], p.LINK_FRAME)
             
         return v_vec, v_mag, 0.5 * p.getDynamicsInfo(uid, -1)[0] * v_mag**2
 
     def calcular_deformacion_revisada(self, fuerza, material_nombre):
-        # FÓRMULA CORRECTA DE DEFORMACIÓN AXIAL (Simplificada para impacto)
         E = MATERIALES[material_nombre]["young"]
-        L = 0.5 # Longitud efectiva (media esfera/cubo)
-        A_eff = np.pi * (0.05**2) # Área de contacto efectiva (asumida)
+        L = 0.5 
+        A_eff = np.pi * (0.05**2) 
         
-        if E < 1e6: E = 1e6 # Evitar división por cero o por Young muy pequeños
+        if E < 1e6: E = 1e6 
         
-        factor_dinamico = 1.5 # Factor de carga dinámica 
+        factor_dinamico = 1.5 
         
-        # Delta L = (F * L) / (A * E)
         deformacion_metros = (fuerza * L * factor_dinamico) / (A_eff * E)
-        return deformacion_metros * 1000 # Retorna en mm
+        return deformacion_metros * 1000 
 
     def capturar_imagen_pybullet(self):
-        """Captura la vista actual de PyBullet como una imagen PNG, con un zoom en el centro de los objetos."""
-        
-        # OBTENER POSICIÓN MEDIA PARA CENTRAR LA CÁMARA
         pos_A, _ = p.getBasePositionAndOrientation(self.obj_A_id)
         pos_B, _ = p.getBasePositionAndOrientation(self.obj_B_id)
         
         target_pos = [(pos_A[0] + pos_B[0]) / 2.0, (pos_A[1] + pos_B[1]) / 2.0, 1.0]
 
-        distance_zoom = 3.0 # Distancia de la cámara ajustada para zoom
+        distance_zoom = 3.0 
         
         view_matrix = p.computeViewMatrixFromYawPitchRoll(
             cameraTargetPosition=target_pos, 
@@ -345,20 +323,16 @@ class AnalizadorColisiones:
         img.save(img_filename)
         return img_filename
 
-    # RENOMBRAMIENTO Y GENERALIZACIÓN DE LA FUNCIÓN DE PROCESAMIENTO
     def procesar_impacto(self, id1, id2, mat1_name, mat2_name, tipo_impacto):
         
-        # Obtener masas (Masa grande para el suelo para simular rigidez)
         m1 = p.getDynamicsInfo(id1, -1)[0] if id1 != 0 else 1e9 
         m2 = p.getDynamicsInfo(id2, -1)[0] if id2 != 0 else 1e9
 
-        # Obtener velocidad POST-impacto
         v1_vec_post, _ = p.getBaseVelocity(id1)
         v2_vec_post, _ = p.getBaseVelocity(id2)
         v1_vec_post = np.array(v1_vec_post)
         v2_vec_post = np.array(v2_vec_post)
         
-        # Obtener velocidad PRE-impacto (de las variables guardadas en loop_simulacion)
         v1_vec_pre = np.array([0.0, 0.0, 0.0])
         if id1 == self.obj_A_id:
             v1_vec_pre = self.vel_prev_A
@@ -378,7 +352,6 @@ class AnalizadorColisiones:
         def_2 = 0.0
         num_participantes = 0
         
-        # Cálculo de Fuerza y Deformación para el Cuerpo 1
         if id1 != 0:
             delta_v1 = np.linalg.norm(v1_vec_post - v1_vec_pre)
             F1 = (m1 * delta_v1) / dt_impacto
@@ -386,7 +359,6 @@ class AnalizadorColisiones:
             F_total += F1
             num_participantes += 1
         
-        # Cálculo de Fuerza y Deformación para el Cuerpo 2
         if id2 != 0:
             delta_v2 = np.linalg.norm(v2_vec_post - v2_vec_pre)
             F2 = (m2 * delta_v2) / dt_impacto
@@ -396,23 +368,18 @@ class AnalizadorColisiones:
             
         F_promedio = F_total / num_participantes if num_participantes > 0 else 0.0
         
-        # Captura de imagen para el reporte
         imagen_impacto_path = self.capturar_imagen_pybullet()
         
-        # Almacenar datos en el historial, asegurando que def_A y def_B siempre se refieran a Objeto A y Objeto B
         datos_impacto = {
             "tiempo": time.time() - self.tiempo_inicio,
             "fuerza": F_promedio,
-            # Si el id es A, guarda def_1 (o def_2 si A es id2). Si no, guarda 0 (N/A)
             "def_A": def_1 if id1 == self.obj_A_id else (def_2 if id2 == self.obj_A_id else 0.0), 
-            # Si el id es B, guarda def_2 (o def_1 si B es id1). Si no, guarda 0 (N/A)
             "def_B": def_2 if id2 == self.obj_B_id else (def_1 if id1 == self.obj_B_id else 0.0),
             "tipo": tipo_impacto, 
             "imagen_path": imagen_impacto_path 
         }
         self.historial_impactos.append(datos_impacto)
         
-        # Actualizar la interfaz en tiempo real
         self.lbl_fuerza.config(text=f"Fuerza Impacto Promedio: {F_promedio:.2f} N ({tipo_impacto})")
         
         def_A_display = f"{datos_impacto['def_A']:.2f} mm" if datos_impacto['def_A'] > 0 else "N/A"
@@ -428,12 +395,10 @@ class AnalizadorColisiones:
         pos_A, _ = p.getBasePositionAndOrientation(self.obj_A_id)
         pos_B, _ = p.getBasePositionAndOrientation(self.obj_B_id)
         
-        # Dibujar línea de trayectoria para A
         if self.prev_pos_A is not None and np.linalg.norm(np.array(pos_A) - np.array(self.prev_pos_A)) > 0.05:
             p.addUserDebugLine(self.prev_pos_A, pos_A, lineColorRGB=MATERIALES[self.mat_A.get()]["color"][:3], lineWidth=2, lifeTime=0)
             self.prev_pos_A = pos_A
             
-        # Dibujar línea de trayectoria para B
         if self.prev_pos_B is not None and np.linalg.norm(np.array(pos_B) - np.array(self.prev_pos_B)) > 0.05:
             p.addUserDebugLine(self.prev_pos_B, pos_B, lineColorRGB=MATERIALES[self.mat_B.get()]["color"][:3], lineWidth=2, lifeTime=0)
             self.prev_pos_B = pos_B
@@ -448,7 +413,6 @@ class AnalizadorColisiones:
                     self.lbl_status.config(text="Reanudando...", foreground="orange")
                     vA_post, _ = p.getBaseVelocity(self.obj_A_id)
                     vB_post, _ = p.getBaseVelocity(self.obj_B_id)
-                    # Guarda la velocidad post-pausa como nueva velocidad 'prev'
                     self.vel_prev_A = np.array(vA_post)
                     self.vel_prev_B = np.array(vB_post)
                 else:
@@ -461,19 +425,16 @@ class AnalizadorColisiones:
                     self.cooldown_activo = False
                     self.lbl_status.config(text="Simulando...", foreground="green")
 
-            # Guardar velocidad ANTES de stepSimulation para el cálculo del impulso
             vA_pre, _ = p.getBaseVelocity(self.obj_A_id)
             vB_pre, _ = p.getBaseVelocity(self.obj_B_id)
             self.vel_prev_A = np.array(vA_pre)
             self.vel_prev_B = np.array(vB_pre)
             
-            # Aplicar fuerzas externas y simular
             self.calcular_fisica_extra(self.obj_A_id)
             self.calcular_fisica_extra(self.obj_B_id)
             p.stepSimulation()
             self.dibujar_trayectoria()
 
-            # Obtener datos POST-stepSimulation
             _, vA, kA = self.calcular_fisica_extra(self.obj_A_id)
             _, vB, kB = self.calcular_fisica_extra(self.obj_B_id)
             
@@ -501,29 +462,22 @@ class AnalizadorColisiones:
                 self.ax.tick_params(colors='white')
                 self.canvas.draw_idle()
 
-            # --- Detección de Colisiones Múltiples ---
             if not self.cooldown_activo and not self.pausa_colision:
                 
                 impacto_detectado = False
                 
-                # 1. Colisión A vs B (Prioridad más alta)
                 contactos_AB = p.getContactPoints(self.obj_A_id, self.obj_B_id)
                 if contactos_AB:
                     self.procesar_impacto(self.obj_A_id, self.obj_B_id, self.mat_A.get(), self.mat_B.get(), "Colisión A vs B")
                     impacto_detectado = True
                 
-                # 2. Colisión A vs Suelo (ID 0)
                 if not impacto_detectado:
-                    # Buscamos contactos de A con el suelo (bodyID 0)
                     contactos_A_G = p.getContactPoints(self.obj_A_id, 0)
                     if contactos_A_G:
-                        # Usamos "Hormigón" como material de suelo para el cálculo de deformación
                         self.procesar_impacto(self.obj_A_id, 0, self.mat_A.get(), "Hormigón", "Impacto A vs Suelo")
                         impacto_detectado = True
                         
-                # 3. Colisión B vs Suelo (ID 0)
                 if not impacto_detectado:
-                    # Buscamos contactos de B con el suelo (bodyID 0)
                     contactos_B_G = p.getContactPoints(self.obj_B_id, 0)
                     if contactos_B_G:
                         self.procesar_impacto(self.obj_B_id, 0, self.mat_B.get(), "Hormigón", "Impacto B vs Suelo")
@@ -553,7 +507,6 @@ class AnalizadorColisiones:
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
         
-        # --- 1. CABECERA Y CONFIGURACIÓN ---
         pdf.set_font("Arial", "B", 16)
         pdf.cell(0, 10, "REPORTE DE ANÁLISIS DE COLISIONES", 0, 1, "C")
         pdf.set_font("Arial", "", 10)
@@ -585,15 +538,12 @@ class AnalizadorColisiones:
         pdf.cell(0, 5, f"Entorno: {self.entorno_var.get()} / Suelo: {self.suelo_var.get()} / Distancia: {self.distancia_var.get():.1f} m", 0, 1)
         pdf.ln(5)
 
-        # --- 2. GRÁFICA DE ENERGÍA ---
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, "2. Gráfica de Energía Total del Sistema", 0, 1, "L")
         pdf.image(plot_filename, x = 15, y = pdf.get_y(), w = 180) 
         
-        # AJUSTE DE SEGURIDAD 
         pdf.ln(130) 
 
-        # --- 3. HISTORIAL Y EVIDENCIA VISUAL ---
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, f"3. Historial Detallado de Impactos", 0, 1, "L")
         
@@ -601,13 +551,11 @@ class AnalizadorColisiones:
         ALTURA_IMAGEN = 67.5 
         
         for i, impacto in enumerate(self.historial_impactos):
-            # Agregar página si no cabe el impacto completo 
             if pdf.get_y() + ALTURA_IMAGEN + 10 > (297 - pdf.b_margin): 
                 pdf.add_page()
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "3. Historial Detallado de Impactos (Continuación)", 0, 1, "L")
             
-            # Título del Impacto (Ahora incluye el tipo)
             pdf.set_fill_color(150, 150, 200)
             pdf.set_font("Arial", "B", 10)
             pdf.cell(0, 7, f"Impacto Nro. {i + 1}: {impacto['tipo']} (Tiempo: {impacto['tiempo']:.2f} s)", 1, 1, 'L', 1)
@@ -615,42 +563,34 @@ class AnalizadorColisiones:
             
             y_start = pdf.get_y() 
             
-            # --- IMAGEN (Columna derecha) ---
             pdf.image(impacto['imagen_path'], x = 105, y = y_start, w = ANCHO_IMAGEN, h = ALTURA_IMAGEN)
             
-            # --- TABLA DE DATOS (Columna izquierda) ---
             pdf.set_xy(15, y_start) 
             pdf.set_font("Arial", "B", 9)
             pdf.set_fill_color(240, 240, 240)
             
-            # Encabezado de la tabla
             pdf.cell(45, 6, "Variable", 1, 0, 'C', 1)
             pdf.cell(45, 6, "Valor", 1, 1, 'C', 1)
             
             pdf.set_font("Arial", "", 9)
             
-            # Fila de Fuerza
             pdf.set_x(15) 
             pdf.cell(45, 5, "Fuerza Impacto Promedio:", 1, 0, 'L')
             pdf.cell(45, 5, f"{impacto['fuerza']:.2f} N", 1, 1, 'L')
             
-            # Fila de Deformación A (Mostrar N/A si no participó)
             def_A_str = f"{impacto['def_A']:.2f} mm" if impacto['def_A'] > 0 else "N/A"
             pdf.set_x(15) 
             pdf.cell(45, 5, f"Deformación A ({self.mat_A.get()}):", 1, 0, 'L')
             pdf.cell(45, 5, def_A_str, 1, 1, 'L')
             
-            # Fila de Deformación B (Mostrar N/A si no participó)
             def_B_str = f"{impacto['def_B']:.2f} mm" if impacto['def_B'] > 0 else "N/A"
             pdf.set_x(15) 
             pdf.cell(45, 5, f"Deformación B ({self.mat_B.get()}):", 1, 0, 'L')
             pdf.cell(45, 5, def_B_str, 1, 1, 'L')
             
-            # --- POSICIONAMIENTO FINAL ---
             pdf.set_y(y_start + ALTURA_IMAGEN + 5) 
             pdf.ln(5)
 
-        # --- GUARDAR Y LIMPIAR ---
         report_filename = f"Reporte_Colision_{time.strftime('%Y%m%d_%H%M%S')}.pdf"
         pdf.output(report_filename)
         
@@ -663,5 +603,6 @@ class AnalizadorColisiones:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = AnalizadorColisiones(root)     
+    app = AnalizadorColisiones(root)      
+
     root.mainloop()
